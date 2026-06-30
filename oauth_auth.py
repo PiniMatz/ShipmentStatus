@@ -1,5 +1,4 @@
 import os
-import json
 import logging
 from dotenv import load_dotenv
 
@@ -77,73 +76,8 @@ def get_gmail_creds():
 
     return creds
 
-
-# --- OUTLOOK OAUTH ---
-def get_outlook_token():
-    try:
-        import msal
-    except ImportError:
-        logger.error("MSAL library not installed yet.")
-        return None
-
-    client_id = os.getenv("OUTLOOK_CLIENT_ID")
-    client_secret = os.getenv("OUTLOOK_CLIENT_SECRET") # Confidential app (if registered as Web/Confidential)
-    # Note: Outlook supports PublicClientApplication (no secret) or ConfidentialClientApplication.
-    # We will use PublicClientApplication since it supports acquire_token_interactive nicely on local.
-    
-    if not client_id:
-        logger.warning("OUTLOOK_CLIENT_ID not found in .env. Skipping Outlook auth.")
-        return None
-
-    scopes = ["Mail.Read", "offline_access"]
-    token_path = 'token_outlook.json'
-    
-    cache = msal.SerializableTokenCache()
-    if os.path.exists(token_path):
-        try:
-            with open(token_path, 'r') as f:
-                cache.deserialize(f.read())
-        except Exception as e:
-            logger.error(f"Error loading Outlook cache: {e}")
-
-    # Build public client app
-    app = msal.PublicClientApplication(
-        client_id,
-        authority="https://login.microsoftonline.com/common",
-        token_cache=cache
-    )
-
-    # Try to get token from cache silently
-    accounts = app.get_accounts()
-    result = None
-    if accounts:
-        result = app.acquire_token_silent(scopes, account=accounts[0])
-
-    if not result:
-        # Fallback to interactive login
-        # ponytail: msal handles browser redirect server automatically here
-        try:
-            result = app.acquire_token_interactive(scopes=scopes)
-        except Exception as e:
-            logger.error(f"Interactive Outlook auth failed: {e}")
-            return None
-
-        if "access_token" in result:
-            if cache.has_state_changed:
-                with open(token_path, 'w') as f:
-                    f.write(cache.serialize())
-        else:
-            logger.error(f"Could not authenticate: {result.get('error_description')}")
-            return None
-
-    return result.get("access_token")
-
 if __name__ == "__main__":
     print("Testing OAuth scripts...")
-    # This can be run locally by the user to authenticate both inboxes.
     gmail_creds = get_gmail_creds()
     if gmail_creds:
         print("Gmail OAuth Authenticated successfully.")
-    outlook_token = get_outlook_token()
-    if outlook_token:
-        print("Outlook OAuth Authenticated successfully.")

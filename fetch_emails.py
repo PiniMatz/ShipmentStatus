@@ -1,9 +1,8 @@
 import os
 import base64
 import logging
-import requests
 from googleapiclient.discovery import build
-from oauth_auth import get_gmail_creds, get_outlook_token
+from oauth_auth import get_gmail_creds
 from email_parser import parse_email
 
 logger = logging.getLogger(__name__)
@@ -37,11 +36,11 @@ def fetch_gmail_shipments():
     shipments = []
     try:
         service = build('gmail', 'v1', credentials=creds)
-        # Search only for AliExpress order/shipping emails on Gmail
-        query = 'subject:("AliExpress") ("order" OR "shipment" OR "tracking" OR "shipped" OR "delivered" OR "confirmation")'
+        # Search for both Amazon and AliExpress order/shipping emails on Gmail
+        query = 'subject:("Amazon" OR "AliExpress") ("order" OR "shipment" OR "tracking" OR "shipped" OR "delivered" OR "confirmation")'
         
         # Get list of messages
-        results = service.users().messages().list(userId='me', q=query, maxResults=30).execute()
+        results = service.users().messages().list(userId='me', q=query, maxResults=50).execute()
         messages = results.get('messages', [])
         
         for msg in messages:
@@ -60,8 +59,8 @@ def fetch_gmail_shipments():
             body = get_gmail_body_text(detail.get('payload', {}))
             shipment = parse_email(subject, body, sender)
             
-            # Filter specifically for AliExpress
-            if shipment['store'] == 'AliExpress' and (shipment['order_id'] or shipment['tracking_number']):
+            # Keep if we extracted an Order ID or a Tracking Number
+            if shipment['order_id'] or shipment['tracking_number']:
                 shipment['email_id'] = msg_id
                 shipment['source'] = 'Gmail'
                 shipments.append(shipment)
@@ -71,63 +70,16 @@ def fetch_gmail_shipments():
 
     return shipments
 
-
-# --- OUTLOOK FETCH ---
-def fetch_outlook_shipments():
-    token = get_outlook_token()
-    if not token:
-        logger.info("Outlook credentials not available. Skipping Outlook fetch.")
-        return []
-
-    shipments = []
-    try:
-        headers = {
-            'Authorization': f'Bearer {token}',
-            'Content-Type': 'application/json'
-        }
-        # Search only for Amazon order/shipping emails on Outlook
-        search_query = '"Amazon" AND ("order" OR "shipment" OR "tracking" OR "shipped" OR "delivered" OR "confirmation")'
-        url = f"https://graph.microsoft.com/v1.0/me/messages?$search={search_query}&$top=30"
-        
-        response = requests.get(url, headers=headers)
-        if response.status_code != 200:
-            logger.error(f"Outlook Graph API returned error {response.status_code}: {response.text}")
-            return []
-            
-        data = response.json()
-        messages = data.get('value', [])
-        
-        for msg in messages:
-            msg_id = msg.get('id')
-            subject = msg.get('subject', '')
-            sender = msg.get('from', {}).get('emailAddress', {}).get('address', '')
-            body = msg.get('body', {}).get('content', '')
-            
-            shipment = parse_email(subject, body, sender)
-            
-            # Filter specifically for Amazon
-            if "Amazon" in shipment['store'] and (shipment['order_id'] or shipment['tracking_number']):
-                shipment['email_id'] = msg_id
-                shipment['source'] = 'Outlook'
-                shipments.append(shipment)
-                
-    except Exception as e:
-        logger.error(f"Error fetching Outlook messages: {e}")
-
-    return shipments
-
 def fetch_all_shipments():
-    """Fetch shipments from both Gmail and Outlook inboxes."""
+    """Fetch shipments from authorized Gmail inbox (supporting both forwarded Amazon and AliExpress)."""
     logger.info("Starting email fetch...")
     gmail_shipments = fetch_gmail_shipments()
-    outlook_shipments = fetch_outlook_shipments()
     
-    # Merge and remove duplicates (by order_id and tracking_number)
+    # Remove duplicates (by store, order_id and tracking_number)
     seen = set()
     all_shipments = []
     
-    for s in gmail_shipments + outlook_shipments:
-        # Create a unique key
+    for s in gmail_shipments:
         key = (s['store'], s['order_id'], s['tracking_number'])
         if key not in seen:
             seen.add(key)
