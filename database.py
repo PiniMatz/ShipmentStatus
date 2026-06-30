@@ -11,7 +11,9 @@ def load_shipments():
         return []
     try:
         with open(DB_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            # Deduplicate on load to automatically clean up database
+            return deduplicate_database(data)
     except Exception as e:
         logger.error(f"Error loading shipments from database: {e}")
         return []
@@ -19,51 +21,106 @@ def load_shipments():
 def save_shipments(shipments):
     """Save shipments to local JSON database."""
     try:
+        # Deduplicate before saving
+        clean_shipments = deduplicate_database(shipments)
         with open(DB_PATH, "w", encoding="utf-8") as f:
-            json.dump(shipments, f, indent=2, ensure_ascii=False)
+            json.dump(clean_shipments, f, indent=2, ensure_ascii=False)
         return True
     except Exception as e:
         logger.error(f"Error saving shipments to database: {e}")
         return False
 
+def deduplicate_database(shipments):
+    """
+    Remove duplicate shipments, keeping the latest/most complete information.
+    Deduplicates based on order_id (if present) or tracking_number (if present).
+    """
+    by_order_id = {}
+    by_tracking = {}
+    standalone_items = [] # Items with neither order_id nor tracking_number
+    
+    for item in shipments:
+        order_id = item.get("order_id")
+        tracking_num = item.get("tracking_number")
+        
+        if not order_id and not tracking_num:
+            standalone_items.append(item)
+            continue
+            
+        matched_item = None
+        if order_id and order_id in by_order_id:
+            matched_item = by_order_id[order_id]
+        elif tracking_num and tracking_num in by_tracking:
+            matched_item = by_tracking[tracking_num]
+            
+        if matched_item:
+            # Merge current item into matched_item
+            for k, v in item.items():
+                if v is not None and v != "":
+                    existing_val = matched_item.get(k)
+                    
+                    if k in ["phone", "notes"]:
+                        # Preserve manual fields if already populated
+                        if not existing_val:
+                            matched_item[k] = v
+                    elif k == "status":
+                        # Prefer actual carrier statuses over Simulated or Unknown
+                        is_current_unknown = existing_val in ["Unknown", "Awaiting first sync", None]
+                        is_new_real = v not in ["Unknown", "Awaiting first sync"]
+                        if is_current_unknown or is_new_real:
+                            matched_item[k] = v
+                    elif k == "details":
+                        is_current_unknown = existing_val in ["Awaiting first sync", "Awaiting status updates...", "", None]
+                        is_new_real = v not in ["Awaiting first sync", "Awaiting status updates...", ""]
+                        if is_current_unknown or is_new_real:
+                            matched_item[k] = v
+                    else:
+                        matched_item[k] = v
+            
+            # Re-index under keys in case matched_item didn't have them originally
+            if order_id:
+                by_order_id[order_id] = matched_item
+            if tracking_num:
+                by_tracking[tracking_num] = matched_item
+        else:
+            # First time seeing this order / tracking number
+            if order_id:
+                by_order_id[order_id] = item
+            if tracking_num:
+                by_tracking[tracking_num] = item
+
+    # Reconstruct unique list of shipments
+    unique_items = []
+    seen_ids = set()
+    for item in list(by_order_id.values()) + list(by_tracking.values()) + standalone_items:
+        item_id = id(item)
+        if item_id not in seen_ids:
+            seen_ids.add(item_id)
+            unique_items.append(item)
+            
+    return unique_items
+
 def upsert_shipments(new_shipments):
     """
     Merge new shipments into database.
-    Preserves existing items to avoid overwriting manually updated fields or status history.
+    Deduplicates and preserves existing items.
     """
     existing = load_shipments()
+    # Combine lists and let deduplicate sweep handle the merges
+    combined = existing + new_shipments
+    updated_list = deduplicate_database(combined)
     
-    # Index existing by unique key: (store, order_id, tracking_number)
-    indexed = {}
-    for item in existing:
-        key = (item.get("store"), item.get("order_id"), item.get("tracking_number"))
-        indexed[key] = item
-        
-    for item in new_shipments:
-        key = (item.get("store"), item.get("order_id"), item.get("tracking_number"))
-        if key in indexed:
-            # Update fields if new data has something better (but keep status if not mock)
-            # E.g., we preserve existing status unless we fetch a new status
-            # For simplicity, we merge the fields
-            existing_item = indexed[key]
-            # Merge fields
-            for k, v in item.items():
-                if v is not None:
-                    existing_item[k] = v
-        else:
-            # Initialize empty/default tracking status if not already present
-            if "status" not in item:
-                item["status"] = "Unknown"
-            if "details" not in item:
-                item["details"] = "Awaiting first sync"
-            indexed[key] = item
+    # Initialize defaults for new shipments
+    for item in updated_list:
+        if "status" not in item:
+            item["status"] = "Unknown"
+        if "details" not in item:
+            item["details"] = "Awaiting first sync"
             
-    updated_list = list(indexed.values())
     save_shipments(updated_list)
     return updated_list
 
 if __name__ == "__main__":
-    # Test DB methods
     test_data = [
         {"store": "Amazon US", "order_id": "111-2222222-3333333", "tracking_number": "1Z999", "carrier": "UPS"}
     ]
