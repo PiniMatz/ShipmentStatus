@@ -86,7 +86,9 @@ def get_cainiao_status(tracking_number):
 def get_tracking_status(tracking_number, carrier_name):
     """
     Fetch tracking status.
-    First tries free, direct carrier fetch (Cainiao/Postal), then falls back to WhereParcel API if configured,
+    First tries 17track API if token is configured in .env.
+    Otherwise tries free, direct carrier fetch (Cainiao/Postal),
+    then falls back to WhereParcel API if configured,
     and finally falls back to simulated Mock status.
     """
     if not tracking_number:
@@ -96,13 +98,63 @@ def get_tracking_status(tracking_number, carrier_name):
             "provider": "none"
         }
 
-    # 1. Try free direct Cainiao lookup first for all tracking codes
+    # 1. Try 17track API if token is configured in .env (highly recommended for Israel Post, Aramex, etc.)
+    token17 = os.getenv("17TRACK_API_KEY") or os.getenv("TRACK17_API_KEY")
+    if token17:
+        logger.info(f"Querying 17track API for: {tracking_number}")
+        url = "https://api.17track.net/track/v2.2/getRealTimeTrackInfo"
+        headers = {
+            "17token": token17,
+            "Content-Type": "application/json"
+        }
+        payload = [{"number": tracking_number, "carrier": 0}]
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=15)
+            if response.status_code == 200:
+                res_data = response.json()
+                if res_data.get("code") == 0:
+                    data = res_data.get("data", {})
+                    accepted = data.get("accepted", [])
+                    if accepted:
+                        item = accepted[0]
+                        track_info = item.get("track_info", {})
+                        api_status = track_info.get("status", "").lower()
+                        latest_event = track_info.get("latest_event", {})
+                        desc = latest_event.get("description") or latest_event.get("desc") or "No description available"
+                        
+                        # Map 17track status
+                        status = "In Transit"
+                        if api_status == "delivered":
+                            status = "Delivered"
+                        elif api_status == "pickup":
+                            status = "Out for Delivery"
+                        elif api_status == "notfound":
+                            status = "Info Received"
+                            
+                        return {
+                            "status": status,
+                            "details": desc,
+                            "provider": "17track"
+                        }
+                    else:
+                        rejected = data.get("rejected", [])
+                        if rejected:
+                            err_msg = rejected[0].get("error", {}).get("message", "Rejected by 17track")
+                            logger.warning(f"17track rejected tracking number {tracking_number}: {err_msg}")
+                else:
+                    logger.error(f"17track API returned error code {res_data.get('code')}: {res_data.get('data')}")
+            else:
+                logger.error(f"17track HTTP status {response.status_code}: {response.text}")
+        except Exception as e:
+            logger.error(f"17track connection error: {e}")
+
+    # 2. Try free direct Cainiao lookup
     logger.info(f"Trying direct Cainiao fetch for tracking: {tracking_number}")
     cainiao_info = get_cainiao_status(tracking_number)
     if cainiao_info:
         return cainiao_info
 
-    # 2. Try configured WhereParcel API (if active in .env)
+    # 3. Try configured WhereParcel API (if active in .env)
     provider = os.getenv("TRACKING_PROVIDER", "mock").lower()
     if provider == "whereparcel":
         api_key = os.getenv("WHEREPARCEL_API_KEY")
@@ -136,15 +188,10 @@ def get_tracking_status(tracking_number, carrier_name):
             except Exception as e:
                 logger.error(f"WhereParcel connection error: {e}")
 
-    # 3. Fallback: Simulated Mock Status
+    # 4. Fallback: Simulated Mock Status
     status, detail = get_mock_status(tracking_number)
     return {
         "status": status,
         "details": f"[Simulated Status] {detail}",
         "provider": "mock"
     }
-
-if __name__ == "__main__":
-    # Test tracking status
-    print("Testing direct Cainiao status:")
-    print(get_tracking_status("LP00612345678901", "Cainiao"))

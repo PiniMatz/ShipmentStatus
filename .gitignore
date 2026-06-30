@@ -7,6 +7,8 @@ client_secret_*.json
 # Local Data
 shipments.json
 parcelsapp_result.json
+cloudscraper_result.txt
+israelpost_curl_result.html
 
 # Python
 __pycache__/
