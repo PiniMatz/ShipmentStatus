@@ -96,15 +96,11 @@ def get_tracking_status(tracking_number, carrier_name):
             "provider": "none"
         }
 
-    # 1. Try free direct Cainiao lookup for AliExpress/Postal/China Post
-    cainiao_carriers = ["Cainiao", "China Post", "Unknown Carrier"]
-    is_postal_number = tracking_number.startswith("LP") or (len(tracking_number) == 13 and tracking_number[-2:].isalpha())
-    
-    if carrier_name in cainiao_carriers or is_postal_number:
-        logger.info(f"Trying direct Cainiao fetch for tracking: {tracking_number}")
-        cainiao_info = get_cainiao_status(tracking_number)
-        if cainiao_info:
-            return cainiao_info
+    # 1. Try free direct Cainiao lookup first for all tracking codes
+    logger.info(f"Trying direct Cainiao fetch for tracking: {tracking_number}")
+    cainiao_info = get_cainiao_status(tracking_number)
+    if cainiao_info:
+        return cainiao_info
 
     # 2. Try configured WhereParcel API (if active in .env)
     provider = os.getenv("TRACKING_PROVIDER", "mock").lower()
