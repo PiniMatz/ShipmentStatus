@@ -95,9 +95,10 @@ def parse_email(subject, body, sender):
         if order_match:
             order_id = order_match.group(2) if len(order_match.groups()) >= 2 else order_match.group(0)
 
-    # 3. Extract Tracking Number and Carrier
+    # 3. Extract Tracking Number, Carrier and Tracking URL
     tracking_number = None
     carrier = "Unknown Carrier"
+    tracking_url = None
     
     # First, look for tracking patterns in the raw HTML links (often contains deep links with tracking nums)
     if is_html:
@@ -105,23 +106,27 @@ def parse_email(subject, body, sender):
         links = re.findall(r'href=["\'](https?://[^"\']+)["\']', body)
         for link in links:
             # Check Cainiao/AliExpress tracking link
-            # e.g., https://global.cainiao.com/newDetail.htm?mailNoList=LP00612345678901
             cainiao_match = re.search(r"(mailNoList|trackNums|nums|trackingId)=([A-Z0-9]+)", link, re.IGNORECASE)
             if cainiao_match:
                 tracking_number = cainiao_match.group(2)
                 carrier = "Cainiao"
+                tracking_url = link
                 break
             
             # Check Amazon tracking link
             # e.g. amazon.com/progress-tracker?orderId=...
             if "progress-tracker" in link:
-                # Amazon handles its own shipping or uses carrier, often tracking is inside the page
                 carrier = "Amazon Shipping"
+                tracking_url = link
+                # Try to extract orderId from the tracking link too!
+                order_id_match = re.search(r"orderId=([0-9-]+)", link)
+                if order_id_match and not order_id:
+                    order_id = order_id_match.group(1)
+                break
                 
     # If no tracking number from links, check regexes on clean text
     if not tracking_number:
         # Look for "tracking number", "tracking", "track #", etc.
-        # e.g. "tracking number: LL123456789CN"
         context_match = re.search(r"(tracking\s*(number|#)?|track\s*#?)\s*:?\s*([A-Z0-9]+)", text_content, re.IGNORECASE)
         if context_match:
             candidate = context_match.group(3).strip()
@@ -143,18 +148,21 @@ def parse_email(subject, body, sender):
                 
     # If we have an AliExpress order but carrier is unknown, and we found a numeric tracking number
     if store == "AliExpress" and not tracking_number:
-        # Sometimes tracking number is just same 15-18 digit number or Cainiao numbers
-        # Cainiao numbers can be 15-18 digits or LP...
         cainiao_match = re.search(r"\b(LP\d{14}|\d{15,18})\b", text_content)
         if cainiao_match:
             tracking_number = cainiao_match.group(0)
             carrier = "Cainiao"
+
+    # Default tracking url if we have a tracking number
+    if not tracking_url and tracking_number:
+        tracking_url = f"https://www.17track.net/en/track?nums={tracking_number}"
 
     return {
         "store": store,
         "order_id": order_id,
         "tracking_number": tracking_number,
         "carrier": carrier,
+        "tracking_url": tracking_url,
         "subject": subject,
         "sender": sender
     }

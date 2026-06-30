@@ -215,9 +215,9 @@ function renderShipments() {
         const trackingNum = item.tracking_number || "No Tracking Num";
         const carrier = item.carrier || "Unknown Carrier";
         const statusDetails = item.details || "Awaiting status updates...";
-        const trackingUrl = trackingNum !== "No Tracking Num" 
+        const trackingUrl = item.tracking_url || (trackingNum !== "No Tracking Num" 
             ? `https://www.17track.net/en/track?nums=${trackingNum}`
-            : "#";
+            : "#");
 
         // Optional metadata
         const phoneHtml = item.phone ? `<span><i class="fa-solid fa-phone"></i> ${item.phone}</span>` : "";
@@ -261,7 +261,7 @@ function renderShipments() {
                 </div>
                 <div class="action-row">
                     <button class="btn-icon btn-edit" title="Edit details"><i class="fa-solid fa-pen"></i></button>
-                    ${trackingNum !== "No Tracking Num" ? `<a href="${trackingUrl}" target="_blank" class="btn-icon btn-track-link" title="Open universal track link"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ""}
+                    ${trackingUrl !== "#" ? `<a href="${trackingUrl}" target="_blank" class="btn-icon btn-track-link" title="Open tracking page"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ""}
                 </div>
             </div>
         `;
