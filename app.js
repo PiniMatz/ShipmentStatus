@@ -24,6 +24,7 @@ const modalCancelBtn = document.getElementById("modal-cancel-btn");
 const editForm = document.getElementById("edit-form");
 const editStoreInput = document.getElementById("edit-store");
 const editOrderIdInput = document.getElementById("edit-order-id");
+const editOriginalTrackingInput = document.getElementById("edit-original-tracking");
 const editTrackingInput = document.getElementById("edit-tracking");
 const editCarrierInput = document.getElementById("edit-carrier");
 const editPhoneInput = document.getElementById("edit-phone");
@@ -294,6 +295,7 @@ function renderShipments() {
 function openEditModal(item) {
     editStoreInput.value = item.store || "";
     editOrderIdInput.value = item.order_id || "";
+    editOriginalTrackingInput.value = item.tracking_number || "";
     editTrackingInput.value = item.tracking_number || "";
     editCarrierInput.value = item.carrier || "";
     editPhoneInput.value = item.phone || "";
@@ -313,6 +315,7 @@ async function submitEditForm(e) {
     const params = {
         store: editStoreInput.value,
         order_id: editOrderIdInput.value,
+        original_tracking_number: editOriginalTrackingInput.value,
         tracking_number: editTrackingInput.value,
         carrier: editCarrierInput.value,
         phone: editPhoneInput.value,

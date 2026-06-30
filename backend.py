@@ -112,19 +112,36 @@ class ShipmentStatusHandler(SimpleHTTPRequestHandler):
                 params = json.loads(post_data.decode("utf-8"))
                 store = params.get("store")
                 order_id = params.get("order_id")
-                tracking_number = params.get("tracking_number")
+                original_tracking = params.get("original_tracking_number")
+                new_tracking = params.get("tracking_number")
                 
                 db_shipments = load_shipments()
                 updated = False
                 
                 for s in db_shipments:
-                    if s.get("store") == store and s.get("order_id") == order_id and s.get("tracking_number") == tracking_number:
+                    # Normalize None and empty values for tracking matching
+                    s_tracking = s.get("tracking_number") or ""
+                    orig_tracking_normalized = original_tracking or ""
+                    
+                    if s.get("store") == store and s.get("order_id") == order_id and s_tracking == orig_tracking_normalized:
                         if "phone" in params:
                             s["phone"] = params["phone"]
                         if "notes" in params:
                             s["notes"] = params["notes"]
                         if "carrier" in params:
                             s["carrier"] = params["carrier"]
+                        
+                        # Update tracking number
+                        s["tracking_number"] = new_tracking if new_tracking else None
+                        
+                        # If tracking code was updated/added, fetch status immediately
+                        if new_tracking and new_tracking != original_tracking:
+                            logger.info(f"Manual tracking update. Fetching status for: {new_tracking}")
+                            tracking_info = get_tracking_status(new_tracking, s.get("carrier"))
+                            s["status"] = tracking_info.get("status", "Unknown")
+                            s["details"] = tracking_info.get("details", "")
+                            s["tracking_provider"] = tracking_info.get("provider", "")
+                            
                         updated = True
                         break
                         
