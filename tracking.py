@@ -2,6 +2,8 @@ import os
 import logging
 import requests
 import hashlib
+import re
+import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -83,6 +85,170 @@ def get_cainiao_status(tracking_number):
         
     return None
 
+def get_selenium_israelpost(tracking_number):
+    """
+    Track package using headless Selenium directly from Israel Post.
+    Resolves Radware bot challenges automatically using real browser automation.
+    """
+    # Import locally to avoid requiring Selenium if not used
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from webdriver_manager.chrome import ChromeDriverManager
+    
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    
+    driver = None
+    try:
+        logger.info(f"Starting Chrome to scrape Israel Post status for: {tracking_number}")
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        # Remove webdriver signature to bypass protection
+        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": "const newProto = navigator.__proto__; delete newProto.webdriver; navigator.__proto__ = newProto;"
+        })
+        
+        url = f"https://doar.israelpost.co.il/en/deliverytracking?itemcode={tracking_number}"
+        driver.get(url)
+        
+        # Wait for Search button to become clickable
+        search_button = WebDriverWait(driver, 8).until(
+            lambda d: d.find_element(By.XPATH, "//button[contains(., 'Search')] | //span[contains(text(), 'Search')]/..")
+        )
+        time.sleep(1)
+        search_button.click()
+        
+        # Wait dynamically for timeline/results list to populate
+        WebDriverWait(driver, 10).until(
+            lambda d: "locality" in d.find_element(By.TAG_NAME, "body").text.lower() or 
+                      "useful actions" in d.find_element(By.TAG_NAME, "body").text.lower() or 
+                      "date" in d.find_element(By.TAG_NAME, "body").text.lower()
+        )
+        
+        body_text = driver.find_element(By.TAG_NAME, "body").text
+        driver.quit()
+        
+        lines = [line.strip() for line in body_text.split('\n') if line.strip()]
+        
+        status_desc = "Notification received regarding shipment"
+        status_state = "In Transit"
+        
+        for i, line in enumerate(lines):
+            # Locate date marker (dd/mm/yyyy)
+            if re.match(r'^\d{2}/\d{2}/\d{4}$', line):
+                candidates = []
+                if i + 1 < len(lines):
+                    candidates.append(lines[i+1])
+                if i + 2 < len(lines):
+                    candidates.append(lines[i+2])
+                status_desc = " | ".join(candidates)
+                break
+                
+        lower_desc = status_desc.lower()
+        if "delivered" in lower_desc:
+            status_state = "Delivered"
+        elif "out for delivery" in lower_desc or "distribution" in lower_desc:
+            status_state = "Out for Delivery"
+            
+        return {
+            "status": status_state,
+            "details": status_desc,
+            "provider": "israelpost (selenium)"
+        }
+    except Exception as e:
+        if driver:
+            driver.quit()
+        logger.error(f"Israel Post Selenium tracking error: {e}")
+        return None
+
+def get_selenium_aramex(tracking_number):
+    """
+    Track package using headless Selenium directly from Aramex tracking portal.
+    """
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from webdriver_manager.chrome import ChromeDriverManager
+    
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    
+    driver = None
+    try:
+        logger.info(f"Starting Chrome to scrape Aramex status for: {tracking_number}")
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        # Bypass signature
+        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": "const newProto = navigator.__proto__; delete newProto.webdriver; navigator.__proto__ = newProto;"
+        })
+        
+        url = "https://www.aramex.com/ae/en/track/shipments"
+        driver.get(url)
+        
+        textarea = WebDriverWait(driver, 8).until(
+            lambda d: d.find_element(By.ID, "TrackingCardsNumber")
+        )
+        textarea.clear()
+        textarea.send_keys(tracking_number)
+        
+        # Click search via JavaScript to avoid overlaps/popups blocking clicks
+        btn = driver.find_element(By.ID, "btn-trackresult-tracksubmit")
+        driver.execute_script("arguments[0].click();", btn)
+        
+        # Wait dynamically for latest update card to load
+        WebDriverWait(driver, 10).until(
+            lambda d: "latest update" in d.find_element(By.TAG_NAME, "body").text.lower()
+        )
+        
+        body_text = driver.find_element(By.TAG_NAME, "body").text
+        driver.quit()
+        
+        lines = [line.strip() for line in body_text.split('\n') if line.strip()]
+        
+        status_desc = "Shipment in transit"
+        status_state = "In Transit"
+        
+        for i, line in enumerate(lines):
+            if "latest update" in line.lower():
+                candidates = []
+                if i + 1 < len(lines):
+                    candidates.append(lines[i+1])
+                if i + 2 < len(lines):
+                    candidates.append(lines[i+2])
+                status_desc = " - ".join(candidates)
+                break
+                
+        lower_desc = status_desc.lower()
+        if "delivered" in lower_desc:
+            status_state = "Delivered"
+        elif "out for delivery" in lower_desc:
+            status_state = "Out for Delivery"
+            
+        return {
+            "status": status_state,
+            "details": status_desc,
+            "provider": "aramex (selenium)"
+        }
+    except Exception as e:
+        if driver:
+            driver.quit()
+        logger.error(f"Aramex Selenium tracking error: {e}")
+        return None
+
 def get_tracking_status(tracking_number, carrier_name):
     """
     Fetch tracking status.
@@ -98,9 +264,12 @@ def get_tracking_status(tracking_number, carrier_name):
             "provider": "none"
         }
 
+    carrier_lower = str(carrier_name).lower()
+    tracking_lower = str(tracking_number).lower()
+
     # 1. Try 17track API if token is configured in .env (highly recommended for Israel Post, Aramex, etc.)
     token17 = os.getenv("17TRACK_API_KEY") or os.getenv("TRACK17_API_KEY")
-    if token17:
+    if token17 and token17 != "PASTE_YOUR_17TRACK_TOKEN_HERE":
         logger.info(f"Querying 17track API for: {tracking_number}")
         url = "https://api.17track.net/track/v2.2/getRealTimeTrackInfo"
         headers = {
@@ -122,7 +291,6 @@ def get_tracking_status(tracking_number, carrier_name):
                         latest_event = track_info.get("latest_event", {})
                         desc = latest_event.get("description") or latest_event.get("desc") or "No description available"
                         
-                        # Map 17track status
                         status = "In Transit"
                         if api_status == "delivered":
                             status = "Delivered"
@@ -148,13 +316,29 @@ def get_tracking_status(tracking_number, carrier_name):
         except Exception as e:
             logger.error(f"17track connection error: {e}")
 
-    # 2. Try free direct Cainiao lookup
+    # 2. Keyless Local Selenium Scraper for Israel Post & Aramex (No API key required)
+    is_israel_post = "israel" in carrier_lower or "postal" in carrier_lower or tracking_lower.endswith("il") or tracking_lower.startswith("ru")
+    is_aramex = "aramex" in carrier_lower or len(tracking_number) == 10 and tracking_number.isdigit()
+    
+    if is_israel_post:
+        logger.info(f"Using local Selenium scraper for Israel Post: {tracking_number}")
+        res = get_selenium_israelpost(tracking_number)
+        if res:
+            return res
+            
+    if is_aramex:
+        logger.info(f"Using local Selenium scraper for Aramex: {tracking_number}")
+        res = get_selenium_aramex(tracking_number)
+        if res:
+            return res
+
+    # 3. Try free direct Cainiao lookup
     logger.info(f"Trying direct Cainiao fetch for tracking: {tracking_number}")
     cainiao_info = get_cainiao_status(tracking_number)
     if cainiao_info:
         return cainiao_info
 
-    # 3. Try configured WhereParcel API (if active in .env)
+    # 4. Try configured WhereParcel API (if active in .env)
     provider = os.getenv("TRACKING_PROVIDER", "mock").lower()
     if provider == "whereparcel":
         api_key = os.getenv("WHEREPARCEL_API_KEY")
@@ -188,7 +372,7 @@ def get_tracking_status(tracking_number, carrier_name):
             except Exception as e:
                 logger.error(f"WhereParcel connection error: {e}")
 
-    # 4. Fallback: Simulated Mock Status
+    # 5. Fallback: Simulated Mock Status
     status, detail = get_mock_status(tracking_number)
     return {
         "status": status,
