@@ -50,6 +50,33 @@ def sync_and_update():
     logger.info("Sync & Update completed successfully.")
     return db_shipments
 
+def refresh_tracking_only():
+    """Updates live status of active packages already in database, without fetching emails."""
+    logger.info("Executing Refresh Tracking Only...")
+    db_shipments = load_shipments()
+    updated_any = False
+    
+    for shipment in db_shipments:
+        status = shipment.get("status", "Unknown")
+        tracking_num = shipment.get("tracking_number")
+        carrier = shipment.get("carrier")
+        
+        # Don't poll if already delivered
+        if status != "Delivered" and tracking_num:
+            logger.info(f"Updating status for tracking: {tracking_num} ({carrier})")
+            tracking_info = get_tracking_status(tracking_num, carrier)
+            
+            shipment["status"] = tracking_info.get("status", "Unknown")
+            shipment["details"] = tracking_info.get("details", "")
+            shipment["tracking_provider"] = tracking_info.get("provider", "")
+            updated_any = True
+            
+    if updated_any:
+        save_shipments(db_shipments)
+        
+    logger.info("Refresh Tracking Only completed successfully.")
+    return db_shipments
+
 class ShipmentStatusHandler(SimpleHTTPRequestHandler):
     
     def end_headers(self):
@@ -85,6 +112,17 @@ class ShipmentStatusHandler(SimpleHTTPRequestHandler):
                 logger.error(f"Sync error: {e}")
                 self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode("utf-8"))
                 
+        elif parsed_path.path == "/api/sync-statuses":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            try:
+                updated_data = refresh_tracking_only()
+                self.wfile.write(json.dumps({"success": True, "shipments": updated_data}).encode("utf-8"))
+            except Exception as e:
+                logger.error(f"Refresh error: {e}")
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode("utf-8"))
+                
         else:
             # Serve standard HTML/JS/CSS static files
             super().do_GET()
@@ -101,6 +139,17 @@ class ShipmentStatusHandler(SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"success": True, "shipments": updated_data}).encode("utf-8"))
             except Exception as e:
                 logger.error(f"Sync error: {e}")
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode("utf-8"))
+                
+        elif parsed_path.path == "/api/sync-statuses":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            try:
+                updated_data = refresh_tracking_only()
+                self.wfile.write(json.dumps({"success": True, "shipments": updated_data}).encode("utf-8"))
+            except Exception as e:
+                logger.error(f"Refresh error: {e}")
                 self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode("utf-8"))
                 
         elif parsed_path.path == "/api/update":

@@ -9,6 +9,8 @@ let searchQuery = "";
 // DOM Elements
 const syncBtn = document.getElementById("btn-sync");
 const syncIcon = document.getElementById("sync-icon");
+const refreshBtn = document.getElementById("btn-refresh");
+const refreshIcon = document.getElementById("refresh-icon");
 const lastSyncTimeText = document.getElementById("last-sync-time");
 const searchInput = document.getElementById("search-input");
 const filterButtons = document.querySelectorAll(".filter-btn");
@@ -40,6 +42,9 @@ document.addEventListener("DOMContentLoaded", () => {
 function setupEventListeners() {
     // Sync Button
     syncBtn.addEventListener("click", triggerSync);
+    
+    // Refresh Button
+    refreshBtn.addEventListener("click", triggerRefreshTracking);
 
     // Search Input
     searchInput.addEventListener("input", (e) => {
@@ -139,6 +144,48 @@ async function triggerSync() {
         syncBtn.disabled = false;
         syncIcon.classList.remove("spinning");
         syncBtn.querySelector("span").innerText = "Sync Inboxes";
+        
+        loadingSpinner.style.display = "none";
+        shipmentsList.style.display = "grid";
+        
+        renderShipments();
+        updateStats();
+    }
+}
+
+async function triggerRefreshTracking() {
+    // UI Loading State
+    refreshBtn.disabled = true;
+    refreshIcon.classList.add("spinning");
+    refreshBtn.querySelector("span").innerText = "Refreshing...";
+    
+    shipmentsList.style.display = "none";
+    emptyMessage.style.display = "none";
+    loadingSpinner.style.display = "block";
+
+    try {
+        const response = await fetch(`${API_BASE}/api/sync-statuses`, { method: "POST" });
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+                shipments = result.shipments;
+                // Set last sync timestamp
+                const now = new Date();
+                lastSyncTimeText.innerText = `Last Refreshed: ${now.toLocaleTimeString()} ${now.toLocaleDateString()}`;
+            } else {
+                alert(`Refresh failed: ${result.error}`);
+            }
+        } else {
+            alert("Server returned error during tracking refresh.");
+        }
+    } catch (e) {
+        console.error("Error connecting to server for status refresh:", e);
+        alert("Connection lost. Make sure the backend server is running.");
+    } finally {
+        // UI Reset
+        refreshBtn.disabled = false;
+        refreshIcon.classList.remove("spinning");
+        refreshBtn.querySelector("span").innerText = "Refresh Tracking";
         
         loadingSpinner.style.display = "none";
         shipmentsList.style.display = "grid";
