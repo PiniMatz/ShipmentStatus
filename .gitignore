@@ -6,6 +6,7 @@ client_secret_*.json
 
 # Local Data
 shipments.json
+parcelsapp_result.json
 
 # Python
 __pycache__/
