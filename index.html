@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shipment Status Tracker</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="stars"></div>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="logo-area">
+                <div class="logo-icon"><i class="fa-solid fa-cube"></i></div>
+                <div>
+                    <h1>TrackFlow</h1>
+                    <p class="subtitle">Unified Inbox Shipment Monitor</p>
+                </div>
+            </div>
+            
+            <div class="sync-controls">
+                <span class="last-sync" id="last-sync-time">Last Synced: Never</span>
+                <button id="btn-sync" class="btn btn-primary">
+                    <i class="fa-solid fa-rotate-right" id="sync-icon"></i>
+                    <span>Sync Inboxes</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats Overview -->
+        <section class="stats-grid">
+            <div class="stat-card" data-filter="all">
+                <div class="stat-icon-wrapper blue"><i class="fa-solid fa-box"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Total Shipments</span>
+                    <span class="stat-value" id="stat-total">0</span>
+                </div>
+            </div>
+            <div class="stat-card" data-filter="In Transit">
+                <div class="stat-icon-wrapper orange"><i class="fa-solid fa-truck-fast"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">In Transit</span>
+                    <span class="stat-value" id="stat-transit">0</span>
+                </div>
+            </div>
+            <div class="stat-card" data-filter="Delivered">
+                <div class="stat-icon-wrapper green"><i class="fa-solid fa-circle-check"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Delivered</span>
+                    <span class="stat-value" id="stat-delivered">0</span>
+                </div>
+            </div>
+            <div class="stat-card" data-filter="Unknown">
+                <div class="stat-icon-wrapper purple"><i class="fa-solid fa-circle-question"></i></div>
+                <div class="stat-info">
+                    <span class="stat-label">Pending/Unknown</span>
+                    <span class="stat-value" id="stat-pending">0</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Filter and Search Bar -->
+        <section class="controls-bar">
+            <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="search-input" placeholder="Search orders, tracking numbers, notes...">
+            </div>
+            <div class="filter-group">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="In Transit">Active</button>
+                <button class="filter-btn" data-filter="Delivered">Delivered</button>
+            </div>
+        </section>
+
+        <!-- Shipments Container -->
+        <main class="shipments-wrapper">
+            <div class="loading-state" id="loading-spinner" style="display: none;">
+                <div class="spinner"></div>
+                <p>Scanning Gmail and Outlook inboxes...</p>
+            </div>
+            
+            <div class="empty-state" id="empty-message">
+                <i class="fa-solid fa-box-open"></i>
+                <h3>No Shipments Found</h3>
+                <p>Connect your email credentials and hit "Sync Inboxes" to begin tracking.</p>
+            </div>
+            
+            <div class="shipments-grid" id="shipments-list">
+                <!-- Cards injected by JS -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal-overlay" id="edit-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Edit Shipment Details</h2>
+                <button class="modal-close" id="modal-close-btn">&times;</button>
+            </div>
+            <form id="edit-form">
+                <input type="hidden" id="edit-store">
+                <input type="hidden" id="edit-order-id">
+                <input type="hidden" id="edit-tracking">
+                
+                <div class="form-group">
+                    <label for="edit-carrier">Courier / Carrier</label>
+                    <input type="text" id="edit-carrier" placeholder="e.g. USPS, DHL, Cainiao">
+                </div>
+                <div class="form-group">
+                    <label for="edit-phone">Recipient Phone Number</label>
+                    <input type="text" id="edit-phone" placeholder="Saved for last-mile search requirements">
+                </div>
+                <div class="form-group">
+                    <label for="edit-notes">Custom Notes</label>
+                    <textarea id="edit-notes" rows="3" placeholder="Add custom notes about this order..."></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

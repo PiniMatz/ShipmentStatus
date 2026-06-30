@@ -1,0 +1,21 @@
+# Credentials and Tokens
+.env
+token_gmail.json
+token_outlook.json
+
+# Local Data
+shipments.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+.env/
+
+# IDEs
+.vscode/
+.idea/
