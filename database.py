@@ -4,6 +4,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 DB_PATH = "shipments.json"
+DELETED_DB_PATH = "deleted_shipments.json"
 
 def load_shipments():
     """Load shipments from local JSON database."""
@@ -29,6 +30,43 @@ def save_shipments(shipments):
     except Exception as e:
         logger.error(f"Error saving shipments to database: {e}")
         return False
+
+def load_deleted():
+    """Load list of manually deleted shipments/orders."""
+    if not os.path.exists(DELETED_DB_PATH):
+        return []
+    try:
+        with open(DELETED_DB_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading deleted list: {e}")
+        return []
+
+def save_deleted(deleted_list):
+    """Save list of manually deleted shipments/orders."""
+    try:
+        with open(DELETED_DB_PATH, "w", encoding="utf-8") as f:
+            json.dump(deleted_list, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving deleted list: {e}")
+        return False
+
+def add_to_deleted(item):
+    """Add a shipment's unique identifiers to the deleted database."""
+    deleted = load_deleted()
+    
+    # Avoid duplicate deleted entries
+    for d in deleted:
+        if d.get("store") == item.get("store") and d.get("order_id") == item.get("order_id") and (d.get("tracking_number") or "") == (item.get("tracking_number") or ""):
+            return
+            
+    deleted.append({
+        "store": item.get("store"),
+        "order_id": item.get("order_id"),
+        "tracking_number": item.get("tracking_number")
+    })
+    save_deleted(deleted)
 
 def deduplicate_database(shipments):
     """
@@ -103,11 +141,33 @@ def deduplicate_database(shipments):
 def upsert_shipments(new_shipments):
     """
     Merge new shipments into database.
-    Deduplicates and preserves existing items.
+    Excludes any shipments that have been explicitly deleted in the past.
     """
     existing = load_shipments()
-    # Combine lists and let deduplicate sweep handle the merges
-    combined = existing + new_shipments
+    deleted = load_deleted()
+    
+    # Filter out new shipments that match any entry in the deleted list
+    filtered_new = []
+    for item in new_shipments:
+        is_deleted = False
+        item_tracking = item.get("tracking_number") or ""
+        
+        for d in deleted:
+            d_tracking = d.get("tracking_number") or ""
+            
+            # Match by order_id
+            if item.get("order_id") and item.get("order_id") == d.get("order_id"):
+                is_deleted = True
+                break
+            # Match by tracking_number
+            if item.get("tracking_number") and item_tracking == d_tracking:
+                is_deleted = True
+                break
+                
+        if not is_deleted:
+            filtered_new.append(item)
+            
+    combined = existing + filtered_new
     updated_list = deduplicate_database(combined)
     
     # Initialize defaults for new shipments
@@ -119,10 +179,3 @@ def upsert_shipments(new_shipments):
             
     save_shipments(updated_list)
     return updated_list
-
-if __name__ == "__main__":
-    test_data = [
-        {"store": "Amazon US", "order_id": "111-2222222-3333333", "tracking_number": "1Z999", "carrier": "UPS"}
-    ]
-    upsert_shipments(test_data)
-    print("DB Load:", load_shipments())

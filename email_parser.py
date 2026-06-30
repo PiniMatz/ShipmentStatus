@@ -38,8 +38,8 @@ TRACKING_PATTERNS = {
     "USPS": r"\b(9[1-5]\d{20}|82\d{8}|70\d{18}|14\d{18}|23\d{18}|03\d{18})\b",
     "FedEx": r"\b(96\d{20}|\d{15}|\d{12})\b",
     "DHL": r"\b(\d{10})\b",
-    # AliExpress/China Post: LP + 14 digits, or 2 letters + 9 digits + 2 letters (e.g. LL123456789CN)
-    "Cainiao": r"\bLP\d{14}\b",
+    # AliExpress/China Post: LP + 14 digits, AE + 9 digits, or 2 letters + 9 digits + 2 letters (e.g. LL123456789CN)
+    "Cainiao": r"\b(LP\d{14}|AE\d{9})\b",
     "China Post": r"\b[A-Z]{2}\d{9}[A-Z]{2}\b",
 }
 
@@ -146,11 +146,17 @@ def parse_email(subject, body, sender):
                 carrier = name
                 break
                 
-    # If we have an AliExpress order but carrier is unknown, and we found a numeric tracking number
+    # If we have an AliExpress order but carrier is unknown, and we found a numeric or LP/AE tracking number
     if store == "AliExpress" and not tracking_number:
-        cainiao_match = re.search(r"\b(LP\d{14}|\d{15,18})\b", text_content)
+        cainiao_match = re.search(r"\b(LP\d{14}|AE\d{9}|\d{15,18})\b", text_content)
         if cainiao_match:
             tracking_number = cainiao_match.group(0)
+            carrier = "Cainiao"
+
+    # If store is Unknown Store but we found a Cainiao/AliExpress style tracking code
+    if store == "Unknown Store" and tracking_number:
+        if str(tracking_number).startswith("LP") or str(tracking_number).startswith("AE"):
+            store = "AliExpress"
             carrier = "Cainiao"
 
     # Default tracking url if we have a tracking number

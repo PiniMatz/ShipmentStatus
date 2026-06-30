@@ -34,5 +34,15 @@ class TestEmailParser(unittest.TestCase):
         self.assertEqual(info["tracking_number"], "LP00611223344556")
         self.assertEqual(info["carrier"], "Cainiao")
 
+    def test_ae_customs_parsing(self):
+        subject = "Package AE040625189: at customs"
+        body = "Your package AE040625189 has arrived at customs."
+        sender = "notification@postal-service.com"
+        
+        info = parse_email(subject, body, sender)
+        self.assertEqual(info["store"], "AliExpress")
+        self.assertEqual(info["tracking_number"], "AE040625189")
+        self.assertEqual(info["carrier"], "Cainiao")
+
 if __name__ == "__main__":
     unittest.main()

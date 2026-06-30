@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # Import our custom modules
 from fetch_emails import fetch_all_shipments
 from tracking import get_tracking_status
-from database import load_shipments, save_shipments, upsert_shipments
+from database import load_shipments, save_shipments, upsert_shipments, add_to_deleted
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -235,6 +235,7 @@ class ShipmentStatusHandler(SimpleHTTPRequestHandler):
                         
                 if deleted:
                     save_shipments(filtered_shipments)
+                    add_to_deleted(params)
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
                     self.end_headers()
