@@ -9,6 +9,15 @@ shipments.json
 parcelsapp_result.json
 cloudscraper_result.txt
 israelpost_curl_result.html
+aramex_body_text_js.txt
+aramex_init.png
+aramex_results_js.png
+israelpost_selenium.png
+israelpost_selenium_results.png
+parcelsapp_homepage.html
+selenium_body_text.txt
+track24_result.html
+track24_scripts.txt
 
 # Python
 __pycache__/
