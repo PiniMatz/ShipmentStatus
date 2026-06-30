@@ -216,9 +216,18 @@ function renderShipments() {
         const trackingNum = item.tracking_number || "No Tracking Num";
         const carrier = item.carrier || "Unknown Carrier";
         const statusDetails = item.details || "Awaiting status updates...";
-        const trackingUrl = item.tracking_url || (trackingNum !== "No Tracking Num" 
-            ? `https://www.17track.net/en/track?nums=${trackingNum}`
-            : "#");
+        let trackingUrl = item.tracking_url;
+        if (!trackingUrl) {
+            if (trackingNum !== "No Tracking Num") {
+                if (carrier.toLowerCase().includes("aramex")) {
+                    trackingUrl = "https://www.aramex.com/ae/en/track/shipments";
+                } else {
+                    trackingUrl = `https://www.17track.net/en/track?nums=${trackingNum}`;
+                }
+            } else {
+                trackingUrl = "#";
+            }
+        }
 
         // Optional metadata
         const phoneHtml = item.phone ? `<span><i class="fa-solid fa-phone"></i> ${item.phone}</span>` : "";
