@@ -2,6 +2,7 @@
 .env
 token_gmail.json
 token_outlook.json
+client_secret_*.json
 
 # Local Data
 shipments.json

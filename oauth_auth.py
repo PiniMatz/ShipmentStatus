@@ -40,23 +40,35 @@ def get_gmail_creds():
                 creds = None
         
         if not creds:
-            client_id = os.getenv("GMAIL_CLIENT_ID")
-            client_secret = os.getenv("GMAIL_CLIENT_SECRET")
-            if not client_id or not client_secret:
-                logger.warning("GMAIL_CLIENT_ID or GMAIL_CLIENT_SECRET not found in .env. Skipping Gmail auth.")
-                return None
+            # Try to discover any client secret JSON file in the directory first
+            secret_file = None
+            for filename in os.listdir('.'):
+                if (filename.startswith('client_secret_') or filename == 'credentials_gmail.json') and filename.endswith('.json'):
+                    secret_file = filename
+                    break
 
-            client_config = {
-                "installed": {
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": ["http://localhost"]
+            if secret_file:
+                logger.info(f"Loading Gmail OAuth client config from file: {secret_file}")
+                flow = InstalledAppFlow.from_client_secrets_file(secret_file, scopes)
+            else:
+                client_id = os.getenv("GMAIL_CLIENT_ID")
+                client_secret = os.getenv("GMAIL_CLIENT_SECRET")
+                if not client_id or not client_secret:
+                    logger.warning("Gmail client credentials not found (no client_secret_*.json file or GMAIL_CLIENT_ID in .env). Skipping Gmail auth.")
+                    return None
+
+                client_config = {
+                    "installed": {
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                        "token_uri": "https://oauth2.googleapis.com/token",
+                        "redirect_uris": ["http://localhost"]
+                    }
                 }
-            }
-            flow = InstalledAppFlow.from_client_config(client_config, scopes)
-            # This will open a browser for the user to login locally
+                flow = InstalledAppFlow.from_client_config(client_config, scopes)
+            
+            # Open browser for local authentication
             creds = flow.run_local_server(port=0, prompt='consent')
             
         # Save credentials for future runs
