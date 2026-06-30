@@ -320,6 +320,7 @@ function renderShipments() {
                 </div>
                 <div class="action-row">
                     <button class="btn-icon btn-edit" title="Edit details"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon btn-delete" title="Delete item"><i class="fa-solid fa-trash"></i></button>
                     ${trackingUrl !== "#" ? `<a href="${trackingUrl}" target="_blank" class="btn-icon btn-track-link" title="Open tracking page"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ""}
                 </div>
             </div>
@@ -343,6 +344,13 @@ function renderShipments() {
         // Register Edit Click Event
         card.querySelector(".btn-edit").addEventListener("click", () => {
             openEditModal(item);
+        });
+
+        // Register Delete Click Event
+        card.querySelector(".btn-delete").addEventListener("click", () => {
+            if (confirm(`Are you sure you want to delete this shipment?`)) {
+                deleteShipment(item);
+            }
         });
 
         shipmentsList.appendChild(card);
@@ -399,5 +407,33 @@ async function submitEditForm(e) {
     } catch (e) {
         console.error("Error saving edits:", e);
         alert("Failed to connect to the server to save changes.");
+    }
+}
+
+async function deleteShipment(item) {
+    const params = {
+        store: item.store,
+        order_id: item.order_id,
+        tracking_number: item.tracking_number
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/api/delete`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(params)
+        });
+
+        if (response.ok) {
+            fetchShipments(); // Reload
+        } else {
+            const err = await response.json();
+            alert(`Error deleting shipment: ${err.error || 'Server error'}`);
+        }
+    } catch (e) {
+        console.error("Error deleting shipment:", e);
+        alert("Failed to connect to the server to delete.");
     }
 }

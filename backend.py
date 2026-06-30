@@ -211,6 +211,45 @@ class ShipmentStatusHandler(SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode("utf-8"))
                 
+        elif parsed_path.path == "/api/delete":
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                params = json.loads(post_data.decode("utf-8"))
+                store = params.get("store")
+                order_id = params.get("order_id")
+                tracking_number = params.get("tracking_number")
+                
+                db_shipments = load_shipments()
+                filtered_shipments = []
+                deleted = False
+                
+                for s in db_shipments:
+                    s_tracking = s.get("tracking_number") or ""
+                    tracking_normalized = tracking_number or ""
+                    
+                    if s.get("store") == store and s.get("order_id") == order_id and s_tracking == tracking_normalized:
+                        deleted = True
+                    else:
+                        filtered_shipments.append(s)
+                        
+                if deleted:
+                    save_shipments(filtered_shipments)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"success": True}).encode("utf-8"))
+                else:
+                    self.send_response(404)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"success": False, "error": "Shipment not found"}).encode("utf-8"))
+            except Exception as e:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode("utf-8"))
+                
         else:
             self.send_response(404)
             self.end_headers()

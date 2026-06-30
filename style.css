@@ -520,6 +520,12 @@ header .subtitle {
     color: #fff;
 }
 
+.btn-delete:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
 /* --- Modal Overlay --- */
 .modal-overlay {
     position: fixed;
