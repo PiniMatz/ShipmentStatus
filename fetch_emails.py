@@ -36,8 +36,8 @@ def fetch_gmail_shipments():
     shipments = []
     try:
         service = build('gmail', 'v1', credentials=creds)
-        # Search for both Amazon and AliExpress order/shipping emails on Gmail
-        query = 'subject:("Amazon" OR "AliExpress") ("order" OR "shipment" OR "tracking" OR "shipped" OR "delivered" OR "confirmation")'
+        # Search for both Amazon and AliExpress order/shipping emails on Gmail starting May 1st, 2026
+        query = 'subject:("Amazon" OR "AliExpress") ("order" OR "shipment" OR "tracking" OR "shipped" OR "delivered" OR "confirmation") after:2026/05/01'
         
         # Get list of messages
         results = service.users().messages().list(userId='me', q=query, maxResults=50).execute()
