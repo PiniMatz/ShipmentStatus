@@ -50,6 +50,11 @@ def parse_email(subject, body, sender):
     subject_lower = subject.lower()
     sender_lower = sender.lower()
     
+    # Strip HTML if needed to get clean text
+    is_html = "<html" in body.lower() or "<div" in body.lower()
+    text_content = strip_tags(body) if is_html else body
+    text_content_lower = text_content.lower()
+    
     # 1. Detect store
     store = "Unknown Store"
     if "amazon" in sender_lower or "amazon" in subject_lower:
@@ -60,12 +65,15 @@ def parse_email(subject, body, sender):
             store = "Amazon DE"
         else:
             store = "Amazon US"
-    elif "aliexpress" in sender_lower or "aliexpress" in subject_lower:
+    elif "amazon" in text_content_lower:
+        if "amazon.co.uk" in text_content_lower:
+            store = "Amazon UK"
+        elif "amazon.de" in text_content_lower:
+            store = "Amazon DE"
+        else:
+            store = "Amazon US"
+    elif "aliexpress" in sender_lower or "aliexpress" in subject_lower or "aliexpress" in text_content_lower:
         store = "AliExpress"
-    
-    # Strip HTML if needed to get clean text
-    is_html = "<html" in body.lower() or "<div" in body.lower()
-    text_content = strip_tags(body) if is_html else body
     
     # 2. Extract Order ID
     order_id = None
