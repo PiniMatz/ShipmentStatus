@@ -18,6 +18,8 @@ parcelsapp_homepage.html
 selenium_body_text.txt
 track24_result.html
 track24_scripts.txt
+last_scan.json
+deleted_shipments.json
 
 # Python
 __pycache__/
