@@ -37,8 +37,8 @@ def fetch_gmail_shipments():
     shipments = []
     try:
         service = build('gmail', 'v1', credentials=creds)
-        # Search for Amazon or AliExpress order/shipping emails
-        query = 'subject:("Amazon" OR "AliExpress") ("order" OR "shipment" OR "tracking" OR "shipped" OR "delivered" OR "confirmation")'
+        # Search only for AliExpress order/shipping emails on Gmail
+        query = 'subject:("AliExpress") ("order" OR "shipment" OR "tracking" OR "shipped" OR "delivered" OR "confirmation")'
         
         # Get list of messages
         results = service.users().messages().list(userId='me', q=query, maxResults=30).execute()
@@ -46,10 +46,8 @@ def fetch_gmail_shipments():
         
         for msg in messages:
             msg_id = msg['id']
-            # Get full message details
             detail = service.users().messages().get(userId='me', id=msg_id, format='full').execute()
             
-            # Extract headers (Subject, From)
             headers = detail.get('payload', {}).get('headers', [])
             subject = ""
             sender = ""
@@ -59,14 +57,11 @@ def fetch_gmail_shipments():
                 elif h['name'].lower() == 'from':
                     sender = h['value']
             
-            # Extract body
             body = get_gmail_body_text(detail.get('payload', {}))
-            
-            # Parse shipment info
             shipment = parse_email(subject, body, sender)
             
-            # Only keep if we actually extracted an Order ID or a Tracking Number
-            if shipment['order_id'] or shipment['tracking_number']:
+            # Filter specifically for AliExpress
+            if shipment['store'] == 'AliExpress' and (shipment['order_id'] or shipment['tracking_number']):
                 shipment['email_id'] = msg_id
                 shipment['source'] = 'Gmail'
                 shipments.append(shipment)
@@ -90,8 +85,8 @@ def fetch_outlook_shipments():
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json'
         }
-        # Graph API Search
-        search_query = '"Amazon" OR "AliExpress" OR "order" OR "shipment" OR "tracking"'
+        # Search only for Amazon order/shipping emails on Outlook
+        search_query = '"Amazon" AND ("order" OR "shipment" OR "tracking" OR "shipped" OR "delivered" OR "confirmation")'
         url = f"https://graph.microsoft.com/v1.0/me/messages?$search={search_query}&$top=30"
         
         response = requests.get(url, headers=headers)
@@ -106,14 +101,12 @@ def fetch_outlook_shipments():
             msg_id = msg.get('id')
             subject = msg.get('subject', '')
             sender = msg.get('from', {}).get('emailAddress', {}).get('address', '')
-            
-            # Body content
             body = msg.get('body', {}).get('content', '')
             
-            # Parse shipment info
             shipment = parse_email(subject, body, sender)
             
-            if shipment['order_id'] or shipment['tracking_number']:
+            # Filter specifically for Amazon
+            if "Amazon" in shipment['store'] and (shipment['order_id'] or shipment['tracking_number']):
                 shipment['email_id'] = msg_id
                 shipment['source'] = 'Outlook'
                 shipments.append(shipment)
