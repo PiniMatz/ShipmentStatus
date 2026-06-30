@@ -268,6 +268,8 @@ function renderShipments() {
             if (trackingNum !== "No Tracking Num") {
                 if (carrier.toLowerCase().includes("aramex")) {
                     trackingUrl = "https://www.aramex.com/ae/en/track/shipments";
+                } else if (carrier.toLowerCase().includes("israel post") || carrier.toLowerCase().includes("israel postal")) {
+                    trackingUrl = `https://www.israelpost.co.il/itemtrace.nsf/mainpage?openagent&lang=EN&itemcode=${trackingNum}`;
                 } else {
                     trackingUrl = `https://www.17track.net/en/track?nums=${trackingNum}`;
                 }
